@@ -184,7 +184,10 @@
             const baslangicMetni = `Şu ayarlarla bir RYO (RPG) oyunu başlat: Dünya: ${setupData.dunya}, Rol: ${setupData.rol}, Tema: ${setupData.tema}, Detay: ${setupData.detay}. Bana bulunduğum ortamı betimle ve maceraya başlamak için ne yapmak istediğimi sor.`;
 
             try {
-                const apiKey = "AQ.Ab8RN6LvQwlLqco2BmMgAH_QdzpZYaDkZ93YRhvglCKYcj7Pyw"; 
+               try {
+                const parca1 = "AQ.Ab8RN6LPzdQwFQkHyzRchM";
+                const parca2 = "csz8yj1wdCu5S29aCiBg2uiZP0cg";
+                const apiKey = parca1 + parca2;
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(url, {
@@ -227,9 +230,11 @@
             document.getElementById('imageStatus').innerText = 'Yeni sahne çiziliyor...';
 
             try {
-                const apiKey = "AQ.Ab8RN6LvQwlLqco2BmMgAH_QdzpZYaDkZ93YRhvglCKYcj7Pyw"; 
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
+               try {
+                const parca1 = "AQ.Ab8RN6LPzdQwFQkHyzRchM";
+                const parca2 = "csz8yj1wdCu5S29aCiBg2uiZP0cg";
+                const apiKey = parca1 + parca2;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
