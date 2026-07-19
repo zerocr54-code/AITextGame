@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>AI RPG - Visual Web Terminal</title>
+  <style>
+    *{box-sizing:border-box}body{margin:0;padding:20px;background:#080a09;color:#00ff66;font-family:"Courier New",monospace;display:flex;justify-content:center}.container{width:100%;max-width:1100px;padding:20px;background:#111;border:1px solid #29332d;border-radius:6px;box-shadow:0 0 22px #00ff6615}h1{text-align:center;font-size:20px}.setup{display:flex;flex-direction:column;gap:10px}label{font-weight:bold}input,textarea{width:100%;padding:11px;background:#000;color:#00ff66;border:1px solid #00ff66;border-radius:3px;font:inherit}button{padding:12px;background:#00ff66;color:#000;border:0;border-radius:3px;font:inherit;font-weight:bold;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}.game{display:none;grid-template-columns:minmax(0,1fr) 400px;gap:20px}.left{display:flex;flex-direction:column;gap:14px}.terminal{height:450px;padding:15px;background:#000;border:1px solid #333;overflow-y:auto;white-space:pre-wrap}.log{margin-bottom:14px;line-height:1.5}.player{color:#ffe600}.system{color:#00bfff}.error{color:#ff5555}.actions{display:flex;gap:10px}.actions input{flex:1}.scene-panel{min-height:420px;padding:10px;background:#000;border:1px solid #333;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative;text-align:center;overflow:hidden}.scene-panel canvas{display:block;width:100%;height:auto;max-height:390px;image-rendering:pixelated;border:2px solid #39503f;background:#101510}.scene-caption{width:100%;min-height:40px;padding:7px;color:#eaffef;background:#111;border:1px solid #263b2c;font-size:12px}.action-badge{display:none;position:absolute;top:18px;left:50%;transform:translateX(-50%);z-index:2;padding:6px 10px;background:#000d;color:#fff;border:1px solid #00ff66;font-weight:bold;font-size:12px;max-width:85%}.status{font-size:13px}.turn{color:#aaa;font-size:12px;text-align:right}@media(max-width:850px){.game{grid-template-columns:1fr}.scene-panel{min-height:280px}.actions{flex-wrap:wrap}}
+  </style>
+</head>
+<body>
+  <main class="container">
+    <h1>🤖 AI Dungeon Master Terminal v5.5</h1><hr style="border-color:#333;margin-bottom:20px">
+    <section id="setup" class="setup">
+      <label>Dünya</label><input id="dunya" placeholder="Örn: Orta Çağ, Siberpunk, Kıyamet Sonrası">
+      <label>Karakterinizin rolü</label><input id="rol" placeholder="Örn: Kâşif, dedektif, büyücü çırağı">
+      <label>Karakterinizin adı <span style="color:#888;font-weight:normal">(boş bırakırsanız bir NPC sorar)</span></label><input id="karakterAdi" maxlength="30" placeholder="Örn: Kadir, Zekro, Lina">
+      <label>Oyunun teması</label><input id="tema" placeholder="Örn: Aksiyon/Macera, Gizem">
+      <label>Ekstra detaylar</label><textarea id="detay" rows="3" placeholder="Karakter veya dünya hakkındaki ek bilgiler..."></textarea>
+      <button id="start">Dünyayı inşa et ve başlat</button>
+    </section>
+    <section id="game" class="game">
+      <div class="left">
+        <div id="terminal" class="terminal" aria-live="polite"></div>
+        <div id="turn" class="turn"></div>
+        <div class="actions"><input id="action" placeholder="Ne yapıyorsunuz?"><button id="send">Gönder</button></div>
+      </div>
+      <div class="scene-panel">
+        <div id="actionBadge" class="action-badge"></div>
+        <div id="status" class="status">Sahne bekleniyor...</div>
+        <canvas id="scene" width="760" height="760" aria-label="Kişiye özel oyun sahnesi"></canvas>
+        <div id="sceneCaption" class="scene-caption"></div>
+      </div>
+    </section>
+  </main>
+  <script>
+    "use strict";
+    const API_BASE_URL = ""; // Backend başka adresteyse örn: https://sunucum.example.com
+    const $ = id => document.getElementById(id);
+    let gameId = "";
+    let sceneSeed = 1;
+    let currentScene = null;
+    let animationFrame = 0;
+    let persistentPlayer = {};
+    let selectedWorld = "";
+    let selectedTheme = "";
+    const knownNpcs = new Map();
+
+    function log(text, type=""){
+      const div=document.createElement("div");div.className=`log ${type}`;div.textContent=text;
+      $("terminal").appendChild(div);$("terminal").scrollTop=$("terminal").scrollHeight;return div;
+    }
+    async function jsonRequest(path,options){
+      const response=await fetch(API_BASE_URL+path,options);let data={};
+      try{data=await response.json();}catch{}
+      if(!response.ok)throw new Error(data.error||`Sunucu hatası: ${response.status}`);return data;
+    }
+    async function startGame(){
+      const body={dunya:$("dunya").value.trim(),rol:$("rol").value.trim(),karakterAdi:$("karakterAdi").value.trim(),tema:$("tema").value.trim(),detay:$("detay").value.trim()};selectedWorld=body.dunya;selectedTheme=body.tema;
+      if(!body.dunya||!body.rol||!body.tema){alert("Dünya, rol ve tema alanlarını doldur.");return}
+      $("start").disabled=true;$("terminal").textContent="";$("setup").style.display="none";$("game").style.display="grid";log("[Sistem] Dünya hazırlanıyor...","system");
+      try{
+        const data=await jsonRequest("/api/game/start",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+        gameId=data.gameId;sceneSeed=hashString(gameId);$("terminal").textContent="";log("Oyun Yöneticisi:\n"+data.response);updateTurn(data);renderScene(data.scene,data.response);
+      }catch(error){log("[Hata] "+error.message,"error");$("setup").style.display="flex";$("game").style.display="none"}
+      finally{$("start").disabled=false}
+    }
+    async function makeMove(){
+      const action=$("action").value.trim();if(!action||$("send").disabled)return;$("action").value="";log("Sen: "+action,"player");
+      const thinking=log("[Oyun Yöneticisi düşünüyor...]","system");$("send").disabled=true;
+      try{
+        const data=await jsonRequest("/api/game/action",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({gameId,action})});
+        thinking.remove();log("Oyun Yöneticisi:\n"+data.response);updateTurn(data);renderScene(data.scene,data.response);
+      }catch(error){thinking.textContent="[Hata] "+error.message;thinking.className="log error"}
+      finally{$("send").disabled=false;$("action").focus()}
+    }
+    function updateTurn(data){$("turn").textContent=`Tur ${data.turn}/${data.maxTurns}`}
+    function hashString(value){let h=2166136261;for(const ch of String(value)){h^=ch.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+    function randomFrom(seed){let x=seed||1;return()=>{x=(Math.imul(x,1664525)+1013904223)>>>0;return x/4294967296}}
+    function clamp(value,min,max){const number=Number(value);return Number.isFinite(number)?Math.max(min,Math.min(max,number)):min}
+    function safeColor(value,fallback){return /^#[0-9a-f]{6}$/i.test(value||"")?value:fallback}
+    function shade(hex,amount){const n=parseInt(hex.slice(1),16),r=clamp((n>>16)+amount,0,255),g=clamp(((n>>8)&255)+amount,0,255),b=clamp((n&255)+amount,0,255);return`rgb(${r},${g},${b})`}
+    function inferWorldStyle(value){const text=(selectedWorld+" "+value).toLocaleLowerCase("tr");if(/isekai/.test(text))return"isekai";if(/fantastik|fantasy|büyü|ejder|elf|cüce/.test(text))return"fantasy";if(/orta çağ|medieval|krallık|şövalye/.test(text))return"medieval";if(/siber|cyber|neon/.test(text))return"cyberpunk";if(/kıyamet|zombi|post/.test(text))return"post_apocalyptic";if(/uzay|space|galaksi/.test(text))return"space";return"modern"}
+    function inferEnvironment(location,requested,worldStyle){const allowed=["forest","fantasy_village","castle","tower","room","road","mountain","dungeon","mansion","cafe","school","modern_city","coast"],text=String(location||"").toLocaleLowerCase("tr");let result=allowed.includes(requested)?requested:"";if(/orman|forest|koru|ağaç|meşe/.test(text))result="forest";else if(/patika|yol|road|geçit/.test(text))result="road";else if(/köy|kasaba|village/.test(text))result="fantasy_village";else if(/kale|saray|castle/.test(text))result="castle";else if(/kule|tower/.test(text))result="tower";else if(/oda|ev|room/.test(text))result="room";else if(/dağ|vadi|mountain/.test(text))result="mountain";else if(/zindan|mağara|dungeon/.test(text))result="dungeon";if(["fantasy","isekai","medieval"].includes(worldStyle)&&result==="modern_city")result=/köy|kasaba/.test(text)?"fantasy_village":"road";return result||(["fantasy","isekai","medieval"].includes(worldStyle)?"road":"modern_city")}
+    function normalizeScene(raw,narrative){
+      const scene=raw&&typeof raw==="object"?raw:{};persistentPlayer={...persistentPlayer,...(scene.player||{})};
+      persistentPlayer.x=clamp(persistentPlayer.x,10,90);persistentPlayer.color=safeColor(persistentPlayer.color,"#22c55e");
+      let npcs=(Array.isArray(scene.npcs)?scene.npcs:[]).slice(0,3).map((npc,index)=>{
+        const name=String(npc.name||`NPC ${index+1}`).slice(0,18),old=knownNpcs.get(name)||{},merged={...old,...npc,name};
+        merged.x=clamp(merged.x,10,90);merged.color=safeColor(merged.color,["#3b82f6","#f59e0b","#a855f7"][index]);knownNpcs.set(name,merged);return merged;
+      });
+      const story=String(narrative||"").toLocaleLowerCase("tr");if(/ejderha|dragon/.test(story)&&!npcs.some(n=>n.kind==="dragon"))npcs.push({name:"Ejderha",kind:"dragon",x:72,color:"#16a34a",emotion:"alert"});if(/yaşlı kadın|yaşlı adam/.test(story)&&npcs.length===0)npcs.push({name:/yaşlı kadın/.test(story)?"Yaşlı Kadın":"Yaşlı Adam",kind:"human",x:70,color:"#7c3aed",emotion:"neutral"});
+      const location=String(scene.location||"Bilinmeyen bölge").slice(0,40),worldStyle=inferWorldStyle((scene.worldStyle||"")+" "+story),environment=inferEnvironment(location+" "+story,scene.environment,worldStyle);
+      return{worldStyle,environment,location,setting:["room","dungeon","mansion","cafe","school"].includes(environment)||scene.setting==="indoor"?"indoor":"outdoor",time:["day","sunset","night"].includes(scene.time)?scene.time:"day",weather:["clear","rain","snow","fog"].includes(scene.weather)?scene.weather:"clear",mood:String(scene.mood||"calm"),action:String(scene.action||"idle"),actionText:String(scene.actionText||scene.action||"Sahne").slice(0,45),player:{...persistentPlayer},npcs,objects:(Array.isArray(scene.objects)?scene.objects:[]).slice(0,5).map(String),caption:String(scene.caption||scene.location||"").slice(0,130)};
+    }
+    function renderScene(raw,narrative){
+      currentScene=normalizeScene(raw,narrative);$("status").style.display="none";$("scene").style.display="block";$("sceneCaption").textContent=currentScene.caption;$("actionBadge").textContent=currentScene.actionText;$("actionBadge").style.display="block";
+      cancelAnimationFrame(animationFrame);const started=performance.now();
+      const animate=now=>{const progress=Math.min(1,(now-started)/900);drawScene(currentScene,progress);if(progress<1)animationFrame=requestAnimationFrame(animate)};animationFrame=requestAnimationFrame(animate);
+    }
+    function drawScene(scene,progress){
+      const canvas=$("scene"),ctx=canvas.getContext("2d");ctx.imageSmoothingEnabled=false;const W=canvas.width,H=canvas.height;
+      const seed=sceneSeed^hashString(scene.location+scene.time),rnd=randomFrom(seed);drawBackground(ctx,W,H,scene,rnd);drawObjects(ctx,W,H,scene.objects,rnd);
+      const actors=[{...scene.player,name:scene.player.name||"Sen",kind:"human",isPlayer:true},...scene.npcs];actors.sort((a,b)=>a.x-b.x).forEach((actor,index)=>drawActor(ctx,W,H,actor,scene.action,progress,index));
+      drawWeather(ctx,W,H,scene.weather,rnd);drawMood(ctx,W,H,scene.mood);drawLabels(ctx,W,H,scene);
+    }
+    function drawBackground(ctx,W,H,scene,rnd){
+      const skies={day:["#65b7ff","#d8f2ff"],sunset:["#f97352","#fbd38d"],night:["#07152f","#1e315c"]},colors=skies[scene.time];
+      const gradient=ctx.createLinearGradient(0,0,0,H);gradient.addColorStop(0,colors[0]);gradient.addColorStop(.65,colors[1]);gradient.addColorStop(.66,scene.setting==="indoor"?"#55483b":"#405c35");gradient.addColorStop(1,scene.setting==="indoor"?"#241f1b":"#172818");ctx.fillStyle=gradient;ctx.fillRect(0,0,W,H);
+      if(scene.setting==="indoor"){
+        ctx.fillStyle="#201b19";ctx.fillRect(0,0,45,H);ctx.fillRect(W-45,0,45,H);ctx.fillStyle="#6b5847";ctx.fillRect(45,H*.57,W-90,15);
+        if(scene.environment==="dungeon"){ctx.fillStyle="#3c4141";for(let y=75;y<500;y+=65)for(let x=45;x<W-45;x+=110){ctx.fillRect(x+(y%2?25:0),y,95,48)}ctx.fillStyle="#111";ctx.fillRect(W*.68,150,120,350)}else{for(let i=0;i<3;i++){const x=95+i*225;ctx.fillStyle=scene.worldStyle==="modern"?"#15243a":"#6fa2b8";ctx.fillRect(x,90,150,210);ctx.strokeStyle=scene.worldStyle==="modern"?"#707b86":"#6b4425";ctx.lineWidth=12;ctx.strokeRect(x,90,150,210)}}
+      }else{
+        if(["forest","road"].includes(scene.environment)){for(let i=0;i<12;i++){const side=i%2===0,x=side?rnd()*210:W-210+rnd()*210,y=280+rnd()*170;ctx.fillStyle="#503721";ctx.fillRect(x,y,20,270);ctx.fillStyle=i%2?"#1f6b38":"#28542e";ctx.beginPath();ctx.arc(x+10,y-18,62+rnd()*35,0,Math.PI*2);ctx.fill()}ctx.fillStyle="#a98654";ctx.beginPath();ctx.moveTo(W*.44,H);ctx.lineTo(W*.48,360);ctx.lineTo(W*.55,360);ctx.lineTo(W*.68,H);ctx.fill()}
+        else if(scene.environment==="fantasy_village"){for(let i=0;i<5;i++){const x=20+i*155,y=330+(i%2)*45;ctx.fillStyle="#c59a62";ctx.fillRect(x,y,125,190);ctx.fillStyle="#6b3d24";ctx.beginPath();ctx.moveTo(x-15,y);ctx.lineTo(x+62,y-85);ctx.lineTo(x+140,y);ctx.fill();ctx.fillStyle="#4a2b1b";ctx.fillRect(x+48,y+105,32,85)}}
+        else if(["castle","tower"].includes(scene.environment)){ctx.fillStyle="#707a78";ctx.fillRect(160,245,440,320);ctx.fillRect(105,145,135,420);ctx.fillRect(520,145,135,420);for(let x=105;x<655;x+=55)ctx.fillRect(x,115,35,55);ctx.fillStyle="#222";ctx.fillRect(330,400,100,165);ctx.fillStyle="#8ac6ff";ctx.fillRect(145,245,38,75);ctx.fillRect(575,245,38,75)}
+        else if(scene.environment==="mountain"){ctx.fillStyle="#5b6470";ctx.beginPath();ctx.moveTo(0,520);ctx.lineTo(190,190);ctx.lineTo(360,520);ctx.lineTo(535,130);ctx.lineTo(W,520);ctx.fill();ctx.fillStyle="#e8eef2";ctx.beginPath();ctx.moveTo(120,310);ctx.lineTo(190,190);ctx.lineTo(255,315);ctx.moveTo(465,250);ctx.lineTo(535,130);ctx.lineTo(600,250);ctx.fill()}
+        else{for(let i=0;i<7;i++){const bw=70+rnd()*90,bh=150+rnd()*230,x=i*120-30;ctx.fillStyle=i%2?"#5b6472":"#394454";ctx.fillRect(x,H*.66-bh,bw,bh);ctx.fillStyle="#ffd76a";for(let wy=H*.66-bh+25;wy<H*.63;wy+=45)for(let wx=x+15;wx<x+bw-12;wx+=35)ctx.fillRect(wx,wy,14,20)}}
+      }
+      ctx.fillStyle="#171a17";ctx.fillRect(0,H-135,W,135);ctx.fillStyle="#334137";ctx.fillRect(0,H-135,W,8);
+    }
+    function drawObjects(ctx,W,H,objects,rnd){
+      objects.forEach((object,index)=>{const x=80+index*(W-160)/Math.max(1,objects.length-1),y=H-165;ctx.save();ctx.translate(x,y);ctx.fillStyle="#795548";
+        const key=object.toLowerCase();if(/table|masa/.test(key)){ctx.fillRect(-45,-45,90,16);ctx.fillRect(-35,-30,12,45);ctx.fillRect(23,-30,12,45)}else if(/chair|sandalye/.test(key)){ctx.fillRect(-20,-55,40,10);ctx.fillRect(-20,-55,9,60);ctx.fillRect(-20,-10,40,9)}else if(/car|araç/.test(key)){ctx.fillStyle="#334155";ctx.fillRect(-55,-35,110,35);ctx.fillRect(-30,-58,55,25);ctx.fillStyle="#111";ctx.beginPath();ctx.arc(-32,2,13,0,7);ctx.arc(34,2,13,0,7);ctx.fill()}else{ctx.fillStyle="#d6a84b";ctx.fillRect(-14,-28,28,28);ctx.fillStyle="#fff3";ctx.fillRect(-8,-22,7,7)}ctx.restore()})
+    }
+    function drawActor(ctx,W,H,actor,action,progress,index){
+      const kind=String(actor.kind||"human").toLowerCase();if(kind==="dragon"){drawDragon(ctx,W,H,actor,action,progress,index);return}if(kind==="animal"){drawAnimal(ctx,W,H,actor,progress,index);return}if(kind==="monster"){drawMonster(ctx,W,H,actor,progress,index);return}drawCharacter(ctx,W,H,actor,action,progress,index)
+    }
+    function actorPosition(W,H,actor,progress,index,action){let x=W*clamp(actor.x,10,90)/100,y=H-155;if(["walk","run"].includes(action))x+=(index===0?1:-1)*progress*(action==="run"?45:24);return{x,y:y+Math.sin(progress*Math.PI*4+index)*4}}
+    function drawName(ctx,name,y){ctx.fillStyle="#000d";ctx.fillRect(-55,y,110,25);ctx.fillStyle="#fff";ctx.font="bold 17px monospace";ctx.textAlign="center";ctx.fillText(String(name||"Karakter").slice(0,12),0,y+18)}
+    function drawSpeech(ctx,text){if(!text)return;const clean=String(text).slice(0,28);ctx.font="16px monospace";const width=Math.min(210,Math.max(90,ctx.measureText(clean).width+24));ctx.fillStyle="#ffffffe8";ctx.fillRect(-width/2,-174,width,38);ctx.fillStyle="#222";ctx.textAlign="center";ctx.fillText(clean,0,-149);ctx.beginPath();ctx.moveTo(-8,-136);ctx.lineTo(4,-119);ctx.lineTo(13,-136);ctx.fill()}
+    function drawCharacter(ctx,W,H,actor,action,progress,index){
+      let{x,y}=actorPosition(W,H,actor,progress,index,action);if(action==="sit")y+=32;
+      const color=safeColor(actor.color,index===0?"#22c55e":"#3b82f6"),skin="#d6a57a",hair={black:"#171717",brown:"#633b24",blonde:"#d7b85a",red:"#9f3a27",gray:"#8d939c"}[actor.hair]||"#282828";
+      ctx.save();ctx.translate(x,y+bob);ctx.fillStyle="#0006";ctx.beginPath();ctx.ellipse(0,22,35,10,0,0,7);ctx.fill();
+      ctx.fillStyle=color;ctx.fillRect(-22,-72,44,65);ctx.fillStyle=shade(color,-35);ctx.fillRect(-22,-20,18,45);ctx.fillRect(4,-20,18,45);
+      ctx.fillStyle=skin;ctx.fillRect(-19,-111,38,38);ctx.fillStyle=hair;ctx.fillRect(-22,-119,44,14);ctx.fillRect(-22,-112,8,20);
+      ctx.fillStyle="#101010";ctx.fillRect(-10,-96,5,5);ctx.fillRect(7,-96,5,5);if(actor.emotion==="happy"){ctx.fillRect(-6,-84,13,3)}else if(actor.emotion==="sad"){ctx.fillRect(-6,-82,13,3)}
+      ctx.strokeStyle=skin;ctx.lineWidth=10;ctx.beginPath();ctx.moveTo(-18,-58);ctx.lineTo(action==="give"?-48:-34,-25);ctx.moveTo(18,-58);ctx.lineTo(["talk","argue"].includes(action)?45:34,-25);ctx.stroke();
+      if(action==="fight"&&index===0){ctx.strokeStyle="#f4f4f5";ctx.lineWidth=7;ctx.beginPath();ctx.moveTo(30,-40);ctx.lineTo(74,-92);ctx.stroke()}
+      drawName(ctx,actor.name,30);drawSpeech(ctx,actor.speech);ctx.restore();
+    }
+    function drawDragon(ctx,W,H,actor,action,progress,index){const{x,y}=actorPosition(W,H,actor,progress,index,action),color=safeColor(actor.color,"#16a34a");ctx.save();ctx.translate(x,y-25);ctx.fillStyle="#0006";ctx.beginPath();ctx.ellipse(0,55,95,18,0,0,7);ctx.fill();ctx.fillStyle=shade(color,-25);ctx.beginPath();ctx.moveTo(-30,-10);ctx.lineTo(-130,-105);ctx.lineTo(-92,15);ctx.moveTo(25,-10);ctx.lineTo(125,-105);ctx.lineTo(88,16);ctx.fill();ctx.fillStyle=color;ctx.beginPath();ctx.ellipse(0,0,76,50,0,0,7);ctx.fill();ctx.fillRect(45,-48,72,48);ctx.fillStyle="#fde047";ctx.fillRect(88,-34,10,10);ctx.fillStyle=color;ctx.beginPath();ctx.moveTo(-65,5);ctx.lineTo(-155,38);ctx.lineTo(-70,28);ctx.fill();ctx.fillRect(-48,35,22,45);ctx.fillRect(30,35,22,45);drawName(ctx,actor.name,78);drawSpeech(ctx,actor.speech);ctx.restore()}
+    function drawAnimal(ctx,W,H,actor,progress,index){const{x,y}=actorPosition(W,H,actor,progress,index,"idle"),color=safeColor(actor.color,"#a16207");ctx.save();ctx.translate(x,y);ctx.fillStyle=color;ctx.fillRect(-44,-45,80,45);ctx.fillRect(22,-75,42,40);ctx.fillRect(-35,-5,13,32);ctx.fillRect(20,-5,13,32);ctx.beginPath();ctx.moveTo(35,-70);ctx.lineTo(42,-96);ctx.lineTo(49,-70);ctx.moveTo(53,-70);ctx.lineTo(62,-96);ctx.lineTo(68,-66);ctx.fill();drawName(ctx,actor.name,32);drawSpeech(ctx,actor.speech);ctx.restore()}
+    function drawMonster(ctx,W,H,actor,progress,index){const{x,y}=actorPosition(W,H,actor,progress,index,"idle"),color=safeColor(actor.color,"#7e22ce");ctx.save();ctx.translate(x,y);ctx.fillStyle=color;ctx.beginPath();ctx.arc(0,-48,58,0,7);ctx.fill();ctx.fillRect(-38,-5,24,42);ctx.fillRect(14,-5,24,42);ctx.fillStyle="#fef08a";ctx.fillRect(-25,-63,13,13);ctx.fillRect(13,-63,13,13);ctx.fillStyle="#111";ctx.fillRect(-21,-59,5,5);ctx.fillRect(17,-59,5,5);drawName(ctx,actor.name,40);drawSpeech(ctx,actor.speech);ctx.restore()}
+    function drawWeather(ctx,W,H,weather,rnd){ctx.save();if(weather==="rain"){ctx.strokeStyle="#b7dcff88";ctx.lineWidth=3;for(let i=0;i<55;i++){const x=rnd()*W,y=rnd()*H;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x-8,y+24);ctx.stroke()}}else if(weather==="snow"){ctx.fillStyle="#fff";for(let i=0;i<55;i++){ctx.beginPath();ctx.arc(rnd()*W,rnd()*H,2+rnd()*4,0,7);ctx.fill()}}else if(weather==="fog"){ctx.fillStyle="#dce5df35";for(let i=0;i<7;i++)ctx.fillRect(0,150+i*75+rnd()*30,W,32)}ctx.restore()}
+    function drawMood(ctx,W,H,mood){const overlays={happy:"#ffd43b14",tense:"#ef444422",mysterious:"#7c3aed20",sad:"#2563eb20",calm:"#22c55e0d"};ctx.fillStyle=overlays[mood]||"#0000";ctx.fillRect(0,0,W,H)}
+    function drawLabels(ctx,W,H,scene){ctx.fillStyle="#000b";ctx.fillRect(18,18,W-36,52);ctx.fillStyle="#d8ffe1";ctx.font="bold 22px monospace";ctx.textAlign="left";ctx.fillText(scene.location,34,50);ctx.font="15px monospace";ctx.textAlign="right";ctx.fillText(`${scene.time} • ${scene.weather}`,W-34,49)}
+    $("start").addEventListener("click",startGame);$("send").addEventListener("click",makeMove);
+    $("action").addEventListener("keydown",event=>{if(event.key==="Enter")makeMove()});
+  </script>
+</body>
+</html>
