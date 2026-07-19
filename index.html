@@ -116,7 +116,7 @@
 <body>
 
     <div class="container">
-        <h1>🤖 AI Dungeon Master Terminal v1.5</h1>
+        <h1>🤖 AI Dungeon Master Terminal v2.5</h1>
         <hr style="border-color: #333; margin-bottom: 20px;">
 
         <div id="setupScreen" class="setup-box">
@@ -174,7 +174,7 @@
                 const parca2 = "JX8u_KD_iHogrJ-5sbvqsXeA";
                 const apiKey = parca1 + parca2;
                 
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(url, {
                     method: 'POST',
@@ -216,12 +216,11 @@
             document.getElementById('imageStatus').innerText = 'Yeni sahne çiziliyor...';
 
             try {
-                // Görseldeki güncel şifren milimetrik olarak ikiye bölündü
                 const parca1 = "AQ.Ab8RN6KtW9Err91ns3z4txAI14";
                 const parca2 = "JX8u_KD_iHogrJ-5sbvqsXeA";
                 const apiKey = parca1 + parca2;
                 
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
                 
                 const response = await fetch(url, {
                     method: 'POST',
