@@ -167,7 +167,7 @@
     </div>
 
     <script>
-        async function oyunuBaslat() {
+       async function oyunuBaslat() {
             const setupData = {
                 dunya: document.getElementById('dunya').value,
                 rol: document.getElementById('rol').value,
@@ -179,20 +179,31 @@
             document.getElementById('gameScreen').style.display = 'grid';
 
             const terminal = document.getElementById('terminal');
-            terminal.innerHTML += `<div class="log system-log">[Sistem]: Gemini 2.5 Flash dünyayı çiziyor, lütfen bekleyin...</div>`;
+            terminal.innerHTML += `<div class="log system-log">[Sistem]: Dünya çiziliyor, lütfen bekleyin...</div>`;
+
+            const baslangicMetni = `Şu ayarlarla bir RYO (RPG) oyunu başlat: Dünya: ${setupData.dunya}, Rol: ${setupData.rol}, Tema: ${setupData.tema}, Detay: ${setupData.detay}. Bana bulunduğum ortamı betimle ve maceraya başlamak için ne yapmak istediğimi sor.`;
 
             try {
-                const response = await fetch('api/game/start', {
+                const apiKey = "AQ.Ab8RN6IWMxgWKnrjUgr0zKJRdjNdSHwvnVtcusQBLJVtIbO2qQ"; 
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(setupData)
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: baslangicMetni }] }]
+                    })
                 });
+                
                 const data = await response.json();
+                const aiCevabi = data.candidates[0].content.parts[0].text;
 
-                terminal.innerHTML = `<div class="log"><b>Oyun Yöneticisi:</b>\n${data.response}</div>`;
-                gorselGuncelle(data.imagePrompt, data.response);
+                terminal.innerHTML = `<div class="log"><b>Oyun Yöneticisi:</b>\n${aiCevabi}</div>`;
+                gorselGuncelle(aiCevabi, aiCevabi);
+
             } catch (error) {
-                terminal.innerHTML += `<div class="log" style="color:red">[Hata]: Sunucu bağlantı hatası.</div>`;
+                terminal.innerHTML += `<div class="log" style="color:red">[Hata]: Gemini API'ye bağlanılamadı.</div>`;
+                console.error(error);
             }
         }
 
@@ -216,94 +227,63 @@
             document.getElementById('imageStatus').innerText = 'Yeni sahne çiziliyor...';
 
             try {
-                const response = await fetch('api/game/action', {
+                const apiKey = "AQ.Ab8RN6IWMxgWKnrjUgr0zKJRdjNdSHwvnVtcusQBLJVtIbO2qQ"; 
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ action: action })
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: action }] }]
+                    })
                 });
+
                 const data = await response.json();
+                const aiCevabi = data.candidates[0].content.parts[0].text;
 
                 document.getElementById(thinkingId).remove();
-                terminal.innerHTML += `<div class="log"><b>Oyun Yöneticisi:</b>\n${data.response}</div>`;
+                terminal.innerHTML += `<div class="log"><b>Oyun Yöneticisi:</b>\n${aiCevabi}</div>`;
                 terminal.scrollTop = terminal.scrollHeight;
+                gorselGuncelle(aiCevabi, aiCevabi); 
 
-                gorselGuncelle(data.imagePrompt, data.response);
             } catch (error) {
                 if (document.getElementById(thinkingId)) {
-                    document.getElementById(thinkingId).innerHTML = `[Hata]: Bir sorun oluştu.`;
+                    document.getElementById(thinkingId).innerHTML = `<div style="color:red">[Hata]: Bir sorun oluştu.</div>`;
                 }
+                console.error("Gemini API Hatası:", error);
             }
         }
-
 
         function gorselGuncelle(prompt, sonHikayeMetni) {
+            const imgElement = document.getElementById('gameImage');
+            const statusElement = document.getElementById('imageStatus');
 
-            const imgElement =
-                document.getElementById('gameImage');
+            let temizMetin = sonHikayeMetni
+                .replace(/[\n\r]/g, ' ')
+                .replace(/[^\w\s.,!?-]/g, '')
+                .trim();
 
-            const statusElement =
-                document.getElementById('imageStatus');
+            let finalPrompt = "fantasy game scene, digital art, " + temizMetin.substring(0, 150);
+            const safePrompt = encodeURIComponent(finalPrompt);
 
-            let finalPrompt = prompt;
-
-            if (!finalPrompt || finalPrompt.trim() === "") {
-
-                let temizMetin = sonHikayeMetni
-                    .replace(/[\n\r]/g, ' ')
-                    .replace(/[^\w\s.,!?-]/g, '')
-                    .trim();
-
-                finalPrompt =
-                    "fantasy game scene, digital art, " +
-                    temizMetin.substring(0, 60);
-            }
-
-            console.log("IMAGE PROMPT:", finalPrompt);
-
-            const safePrompt =
-                encodeURIComponent(finalPrompt);
-
-            const yeniResimUrl =
-                `/api/game/image?prompt=${safePrompt}`;
+            const yeniResimUrl = `https://image.pollinations.ai/prompt/${safePrompt}?nologo=true`;
 
             statusElement.style.display = 'block';
-
-            statusElement.innerText =
-                'Görsel oluşturuluyor...';
-
+            statusElement.innerText = 'Görsel oluşturuluyor...';
             imgElement.style.display = 'none';
 
-            fetch(yeniResimUrl)
-                .then(res => {
+            imgElement.onload = function() {
+                statusElement.style.display = 'none';
+                imgElement.style.display = 'block';
+            };
 
-                    if (!res.ok) {
-                        throw new Error("HTTP Error");
-                    }
+            imgElement.onerror = function() {
+                statusElement.style.display = 'block';
+                statusElement.innerText = 'Görsel yüklenemedi.';
+            };
 
-                    return res.blob();
-                })
-                .then(blob => {
-
-                    const objectUrl =
-                        URL.createObjectURL(blob);
-
-                    imgElement.src = objectUrl;
-
-                    statusElement.style.display = 'none';
-
-                    imgElement.style.display = 'block';
-                })
-                .catch(err => {
-
-                    console.error(err);
-
-                    statusElement.style.display = 'block';
-
-                    statusElement.innerText =
-                        'Görsel üretilemedi.';
-                });
+            imgElement.src = yeniResimUrl;
         }
-
     </script>
 </body>
 </html>
