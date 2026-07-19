@@ -169,9 +169,11 @@
             const baslangicMetni = `Şu ayarlarla bir RYO (RPG) oyunu başlat: Dünya: ${setupData.dunya}, Rol: ${setupData.rol}, Tema: ${setupData.tema}, Detay: ${setupData.detay}. Bana bulunduğum ortamı betimle ve maceraya başlamak için ne yapmak istediğimi sor.`;
 
             try {
-                const parca1 = "AQ.Ab8RN6LPzdQwFQkHyzRchM";
-                const parca2 = "csz8yj1wdCu5S29aCiBg2uiZP0cg";
+                // YENİ ŞİFRE (1. KISIM)
+                const parca1 = "AQ.Ab8RN6Jw_sakEcPHgT8-uuCe";
+                const parca2 = "hD8oFKciy6ievdLKHtGNhjM9QQ";
                 const apiKey = parca1 + parca2;
+                
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(url, {
@@ -214,11 +216,13 @@
             document.getElementById('imageStatus').innerText = 'Yeni sahne çiziliyor...';
 
             try {
-                const parca1 = "AQ.Ab8RN6LPzdQwFQkHyzRchM";
-                const parca2 = "csz8yj1wdCu5S29aCiBg2uiZP0cg";
+                // YENİ ŞİFRE (2. KISIM)
+                const parca1 = "AQ.Ab8RN6Jw_sakEcPHgT8-uuCe";
+                const parca2 = "hD8oFKciy6ievdLKHtGNhjM9QQ";
                 const apiKey = parca1 + parca2;
+                
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
-
+                
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
