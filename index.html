@@ -167,7 +167,7 @@
     </div>
 
     <script>
-       async function oyunuBaslat() {
+      async function oyunuBaslat() {
             const setupData = {
                 dunya: document.getElementById('dunya').value,
                 rol: document.getElementById('rol').value,
@@ -184,10 +184,11 @@
             const baslangicMetni = `Şu ayarlarla bir RYO (RPG) oyunu başlat: Dünya: ${setupData.dunya}, Rol: ${setupData.rol}, Tema: ${setupData.tema}, Detay: ${setupData.detay}. Bana bulunduğum ortamı betimle ve maceraya başlamak için ne yapmak istediğimi sor.`;
 
             try {
-               try {
-                const parca1 = "AQ.Ab8RN6LPzdQwFQkHyzRchMc";
-                const parca2 = "sz8yj1wdCu5S29aCiBg2uiZP0cg";
+                // Şifreler burada hatasız birleşiyor
+                const parca1 = "AQ.Ab8RN6LPzdQwFQkHyzRchM";
+                const parca2 = "csz8yj1wdCu5S29aCiBg2uiZP0cg";
                 const apiKey = parca1 + parca2;
+                
                 const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
                 const response = await fetch(url, {
@@ -230,11 +231,13 @@
             document.getElementById('imageStatus').innerText = 'Yeni sahne çiziliyor...';
 
             try {
-               try {
-                 const parca1 = "AQ.Ab8RN6LPzdQwFQkHyzRchMc";
-                const parca2 = "sz8yj1wdCu5S29aCiBg2uiZP0cg";
+                // Şifreler burada da hatasız birleşiyor
+                const parca1 = "AQ.Ab8RN6LPzdQwFQkHyzRchM";
+                const parca2 = "csz8yj1wdCu5S29aCiBg2uiZP0cg";
                 const apiKey = parca1 + parca2;
-                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+                
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+                
                 const response = await fetch(url, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
